@@ -18,9 +18,7 @@ class UserService {
                 return res.json({ message: 'All fields are required!', status: 400 });
             }
             const hashedPassword = await bcrypt.hash(password, 10);
-            console.log('hashedPassword', hashedPassword)
             const defaultRole = await Role.findOne({ name: 'user' });
-            console.log('defaultRole', defaultRole)
             const newUser = await User.create({
                 firstName,
                 lastName,
@@ -38,7 +36,7 @@ class UserService {
 
     async getUsers(req, res) {
         try {
-            const users = await User.find();
+            const users = await User.find({ isDeleted: false });
             return res.send({ message: 'Success', status: 200, data: { list: users, totalCount: users.length } });
         } catch (e) {
             console.log(`UserService :: getUsers :: Error`, JSON.stringify(e));
@@ -48,7 +46,7 @@ class UserService {
     async getUserById(req, res) {
         try {
             const { id } = req.params;
-            const user = await User.findById(id);
+            const user = await User.findOne({ _id: id, isDeleted: false });
 
             if (!user) {
                 return res.json({ message: 'User not found', status: 404 });
@@ -74,14 +72,13 @@ class UserService {
                 return res.json({ message: "At least one field must be provided to update the user.", status: 400 });
             }
 
-            const user = await User.findById(id);
+            const user = await User.findOne({ _id: id, isDeleted: false });
 
             if (!user) {
                 return res.json({ message: 'User not found', status: 404 });
             }
 
             const updatedUser = await User.findByIdAndUpdate(id, req.body, { new: true });
-
 
             return res.json({
                 message: 'User updated successfully',
@@ -97,13 +94,22 @@ class UserService {
     async deleteUser(req, res) {
         try {
             const { id } = req.params;
-            const user = await User.findById(id);
+            const user = await User.findOne({ _id: id, isDeleted: false });
 
             if (!user) {
                 return res.json({ message: 'User not found', status: 404 });
             }
 
-            await User.findByIdAndDelete(id);
+            const result = await User.updateOne(
+                { _id: id },
+                {
+                    $set: {
+                        deletedAt: new Date(),
+                        deletedBy: user._id.toString(),
+                        isDeleted: true,
+                    },
+                }
+            );
             return res.json({ message: 'User deleted successfully', status: 200 });
         } catch (e) {
             console.log(`UserService :: deleteUser :: Error`, JSON.stringify(e));
@@ -143,7 +149,7 @@ class UserService {
                 sortOrder = -1,
             } = req.query;
 
-            const andFilters = [];
+            const andFilters = [{ isDeleted: false }];
 
             if (search) {
                 const escaped = search.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -181,7 +187,7 @@ class UserService {
 
             const count = await User.countDocuments(query);
 
-            res.json({ data: users, totalCount: count });
+            res.json({ message: 'Success', Status: 200, data: { list: users, totalCount: count } });
         } catch (err) {
             res.json({ message: 'Failed to fetch users', error: err.message, status: 500 });
         }
